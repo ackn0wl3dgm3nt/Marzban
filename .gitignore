@@ -160,3 +160,6 @@ xray-core
 *-dev.yml
 *-dev.yaml
 *-debug.*
+
+# Xray
+xray/

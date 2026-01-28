@@ -29,7 +29,7 @@ def merge_dicts(a, b):  # B will override A dictionary key and values
 class XRayConfig(dict):
     def __init__(self,
                  config: Union[dict, str, PosixPath] = {},
-                 api_host: str = "127.0.0.1",
+                 api_host: str = "0.0.0.0",
                  api_port: int = 8080):
         if isinstance(config, str):
             try:

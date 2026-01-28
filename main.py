@@ -82,15 +82,18 @@ Use the following command:
 
 {click.style(f'ssh -L {UVICORN_PORT}:localhost:{UVICORN_PORT} user@server', italic=True, fg="cyan")}
 
-Then, navigate to {click.style(f'http://127.0.0.1:{UVICORN_PORT}', bold=True)} on your computer.
+Then, navigate to {click.style(f'http://{UVICORN_HOST}:{UVICORN_PORT}', bold=True)} on your computer.
             """)
 
-            bind_args['host'] = '127.0.0.1'
+            bind_args['host'] = UVICORN_HOST
             bind_args['port'] = UVICORN_PORT
 
     if DEBUG:
         bind_args['uds'] = None
         bind_args['host'] = '0.0.0.0'
+
+    print(f"DEBUG: bind_args = {bind_args}")
+    print(f"DEBUG: UVICORN_HOST = {UVICORN_HOST}")
 
     try:
         uvicorn.run(

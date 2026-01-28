@@ -100,7 +100,7 @@ def random_password() -> str:
 def check_port(port: int) -> bool:
     s = socket.socket()
     try:
-        s.connect(('127.0.0.1', port))
+        s.connect(('0.0.0.0', port))
         return True
     except socket.error:
         return False
@@ -144,7 +144,7 @@ def get_public_ip():
     finally:
         sock.close()
 
-    return '127.0.0.1'
+    return '0.0.0.0'
 
 
 def get_public_ipv6():
