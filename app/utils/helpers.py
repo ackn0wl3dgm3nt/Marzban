@@ -1,4 +1,5 @@
 import json
+from datetime import UTC
 from datetime import datetime as dt
 from uuid import UUID
 
@@ -8,7 +9,7 @@ def calculate_usage_percent(used_traffic: int, data_limit: int) -> float:
 
 
 def calculate_expiration_days(expire: int) -> int:
-    return (dt.fromtimestamp(expire) - dt.utcnow()).days
+    return (dt.fromtimestamp(expire) - dt.now(UTC)).days
 
 
 def yml_uuid_representer(dumper, data):

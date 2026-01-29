@@ -1,4 +1,5 @@
 from collections import deque
+from datetime import UTC
 from datetime import datetime as dt
 from enum import Enum
 from typing import Type
@@ -28,8 +29,8 @@ class Notification(BaseModel):
         reached_usage_percent = "reached_usage_percent"
         reached_days_left = "reached_days_left"
 
-    enqueued_at: float = dt.utcnow().timestamp()
-    send_at: float = dt.utcnow().timestamp()
+    enqueued_at: float = dt.now(UTC).timestamp()
+    send_at: float = dt.now(UTC).timestamp()
     tries: int = 0
 
 

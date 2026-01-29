@@ -4,10 +4,11 @@ from typing import TYPE_CHECKING, Dict, Sequence
 from app.models.proxy import ProxyHostSecurity
 from app.utils.store import DictStorage
 from app.utils.system import check_port
-from app.xray import operations
+from app.xray import async_ops, operations, sync_ops
 from app.xray.config import XRayConfig
 from app.xray.core import XRayCore
 from app.xray.node import XRayNode
+from app.xray.manager import XrayManager
 from config import XRAY_ASSETS_PATH, XRAY_EXECUTABLE_PATH, XRAY_JSON
 from xray_api import XRay as XRayAPI
 from xray_api import exceptions, types
@@ -27,6 +28,9 @@ finally:
 api = XRayAPI(config.api_host, config.api_port)
 
 nodes: Dict[int, XRayNode] = {}
+
+# XrayManager singleton for async operations
+xray_manager = XrayManager()
 
 
 if TYPE_CHECKING:
@@ -74,10 +78,14 @@ __all__ = [
     "api",
     "nodes",
     "operations",
+    "sync_ops",
+    "async_ops",
+    "xray_manager",
     "exceptions",
     "exc",
     "types",
     "XRayConfig",
     "XRayCore",
     "XRayNode",
+    "XrayManager",
 ]

@@ -2,7 +2,7 @@
 Functions for managing proxy hosts, users, user templates, nodes, and administrative tasks.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -491,7 +491,7 @@ def update_user(db: Session, dbuser: User, modify: UserModify) -> User:
     if modify.expire is not None:
         dbuser.expire = (modify.expire or None)
         if dbuser.status in (UserStatus.active, UserStatus.expired):
-            if not dbuser.expire or dbuser.expire > datetime.utcnow().timestamp():
+            if not dbuser.expire or dbuser.expire > datetime.now(UTC).timestamp():
                 dbuser.status = UserStatus.active
                 for days_left in sorted(NOTIFY_DAYS_LEFT):
                     if not dbuser.expire or (calculate_expiration_days(
@@ -525,7 +525,7 @@ def update_user(db: Session, dbuser: User, modify: UserModify) -> User:
     elif dbuser.next_plan is not None:
         db.delete(dbuser.next_plan)
 
-    dbuser.edit_at = datetime.utcnow()
+    dbuser.edit_at = datetime.now(UTC)
 
     db.commit()
     db.refresh(dbuser)
@@ -613,7 +613,7 @@ def revoke_user_sub(db: Session, dbuser: User) -> User:
     Returns:
         User: The updated user object.
     """
-    dbuser.sub_revoked_at = datetime.utcnow()
+    dbuser.sub_revoked_at = datetime.now(UTC)
 
     user = UserResponse.model_validate(dbuser)
     for proxy_type, settings in user.proxies.copy().items():
@@ -638,7 +638,7 @@ def update_user_sub(db: Session, dbuser: User, user_agent: str) -> User:
     Returns:
         User: The updated user object.
     """
-    dbuser.sub_updated_at = datetime.utcnow()
+    dbuser.sub_updated_at = datetime.now(UTC)
     dbuser.sub_last_user_agent = user_agent
 
     db.commit()
@@ -685,7 +685,7 @@ def disable_all_active_users(db: Session, admin: Optional[Admin] = None):
     if admin:
         query = query.filter(User.admin == admin)
 
-    query.update({User.status: UserStatus.disabled, User.last_status_change: datetime.utcnow()}, synchronize_session=False)
+    query.update({User.status: UserStatus.disabled, User.last_status_change: datetime.now(UTC)}, synchronize_session=False)
 
     db.commit()
 
@@ -709,9 +709,9 @@ def activate_all_disabled_users(db: Session, admin: Optional[Admin] = None):
         query_for_on_hold_users = query_for_on_hold_users.filter(User.admin == admin)
 
     query_for_on_hold_users.update(
-        {User.status: UserStatus.on_hold, User.last_status_change: datetime.utcnow()}, synchronize_session=False)
+        {User.status: UserStatus.on_hold, User.last_status_change: datetime.now(UTC)}, synchronize_session=False)
     query_for_active_users.update(
-        {User.status: UserStatus.active, User.last_status_change: datetime.utcnow()}, synchronize_session=False)
+        {User.status: UserStatus.active, User.last_status_change: datetime.now(UTC)}, synchronize_session=False)
 
     db.commit()
 
@@ -747,7 +747,7 @@ def autodelete_expired_users(db: Session,
     expired_users = [
         user
         for (user, auto_delete) in query
-        if user.last_status_change + timedelta(days=auto_delete) <= datetime.utcnow()
+        if user.last_status_change + timedelta(days=auto_delete) <= datetime.now(UTC)
     ]
 
     if expired_users:
@@ -818,7 +818,7 @@ def update_user_status(db: Session, dbuser: User, status: UserStatus) -> User:
         User: The updated user object.
     """
     dbuser.status = status
-    dbuser.last_status_change = datetime.utcnow()
+    dbuser.last_status_change = datetime.now(UTC)
     db.commit()
     db.refresh(dbuser)
     return dbuser
@@ -853,7 +853,7 @@ def start_user_expire(db: Session, dbuser: User) -> User:
     Returns:
         User: The updated user object.
     """
-    expire = int(datetime.utcnow().timestamp()) + dbuser.on_hold_expire_duration
+    expire = int(datetime.now(UTC).timestamp()) + dbuser.on_hold_expire_duration
     dbuser.expire = expire
     dbuser.on_hold_expire_duration = None
     dbuser.on_hold_timeout = None
@@ -955,7 +955,7 @@ def update_admin(db: Session, dbadmin: Admin, modified_admin: AdminModify) -> Ad
         dbadmin.is_sudo = modified_admin.is_sudo
     if modified_admin.password is not None and dbadmin.hashed_password != modified_admin.hashed_password:
         dbadmin.hashed_password = modified_admin.hashed_password
-        dbadmin.password_reset_at = datetime.utcnow()
+        dbadmin.password_reset_at = datetime.now(UTC)
     if modified_admin.telegram_id:
         dbadmin.telegram_id = modified_admin.telegram_id
     if modified_admin.discord_webhook:
@@ -982,7 +982,7 @@ def partial_update_admin(db: Session, dbadmin: Admin, modified_admin: AdminParti
         dbadmin.is_sudo = modified_admin.is_sudo
     if modified_admin.password is not None and dbadmin.hashed_password != modified_admin.hashed_password:
         dbadmin.hashed_password = modified_admin.hashed_password
-        dbadmin.password_reset_at = datetime.utcnow()
+        dbadmin.password_reset_at = datetime.now(UTC)
     if modified_admin.telegram_id is not None:
         dbadmin.telegram_id = modified_admin.telegram_id
     if modified_admin.discord_webhook is not None:
@@ -1387,7 +1387,7 @@ def update_node_status(db: Session, dbnode: Node, status: NodeStatus, message: s
     dbnode.status = status
     dbnode.message = message
     dbnode.xray_version = version
-    dbnode.last_status_change = datetime.utcnow()
+    dbnode.last_status_change = datetime.now(UTC)
     db.commit()
     db.refresh(dbnode)
     return dbnode
@@ -1447,7 +1447,7 @@ def get_notification_reminder(
         return None
 
     # Check if the reminder has expired
-    if reminder.expires_at and reminder.expires_at < datetime.utcnow():
+    if reminder.expires_at and reminder.expires_at < datetime.now(UTC):
         db.delete(reminder)
         db.commit()
         return None
@@ -1494,7 +1494,7 @@ def delete_notification_reminder(db: Session, dbreminder: NotificationReminder) 
 
 
 def count_online_users(db: Session, hours: int = 24):
-    twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=hours)
+    twenty_four_hours_ago = datetime.now(UTC) - timedelta(hours=hours)
     query = db.query(func.count(User.id)).filter(User.online_at.isnot(
         None), User.online_at >= twenty_four_hours_ago)
     return query.scalar()

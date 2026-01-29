@@ -1,7 +1,7 @@
 import time
 import jwt
 from base64 import b64decode, b64encode
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from hashlib import sha256
 from math import ceil
@@ -19,9 +19,9 @@ def get_secret_key():
 
 
 def create_admin_token(username: str, is_sudo=False) -> str:
-    data = {"sub": username, "access": "sudo" if is_sudo else "admin", "iat": datetime.utcnow()}
+    data = {"sub": username, "access": "sudo" if is_sudo else "admin", "iat": datetime.now(UTC)}
     if JWT_ACCESS_TOKEN_EXPIRE_MINUTES > 0:
-        expire = datetime.utcnow() + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(UTC) + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
         data["exp"] = expire
     encoded_jwt = jwt.encode(data, get_secret_key(), algorithm="HS256")
     return encoded_jwt

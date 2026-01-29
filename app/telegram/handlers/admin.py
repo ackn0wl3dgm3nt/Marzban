@@ -815,7 +815,7 @@ def template_charge_command(call: types.CallbackQuery):
                 data_limit=template.data_limit,
             )
             db_user = crud.update_user(db, db_user, modify)
-            xray.operations.add_user(db_user)
+            xray.sync_ops.add_user(db_user)
             bot.answer_callback_query(call.id, "🔋 User Successfully Charged!")
             bot.edit_message_text(
                 get_user_info_text(db_user),
@@ -1493,7 +1493,7 @@ def confirm_user_command(call: types.CallbackQuery):
         with GetDB() as db:
             db_user = crud.get_user(db, username)
             crud.remove_user(db, db_user)
-            xray.operations.remove_user(db_user)
+            xray.sync_ops.remove_user(db_user)
 
         bot.edit_message_text(
             '✅ User deleted.',
@@ -1521,7 +1521,7 @@ def confirm_user_command(call: types.CallbackQuery):
             db_user = crud.get_user(db, username)
             crud.update_user(db, db_user, UserModify(
                 status=UserStatusModify.disabled))
-            xray.operations.remove_user(db_user)
+            xray.sync_ops.remove_user(db_user)
             bot.edit_message_text(
                 get_user_info_text(db_user),
                 call.message.chat.id,
@@ -1545,7 +1545,7 @@ def confirm_user_command(call: types.CallbackQuery):
             db_user = crud.get_user(db, username)
             crud.update_user(db, db_user, UserModify(
                 status=UserStatusModify.active))
-            xray.operations.add_user(db_user)
+            xray.sync_ops.add_user(db_user)
             bot.edit_message_text(
                 get_user_info_text(db_user),
                 call.message.chat.id,
@@ -1569,7 +1569,7 @@ def confirm_user_command(call: types.CallbackQuery):
             db_user = crud.get_user(db, username)
             crud.reset_user_data_usage(db, db_user)
             if db_user.status in [UserStatus.active, UserStatus.on_hold]:
-                xray.operations.add_user(db_user)
+                xray.sync_ops.add_user(db_user)
             user = UserResponse.model_validate(db_user)
             bot.edit_message_text(
                 get_user_info_text(db_user),
@@ -1645,7 +1645,7 @@ def confirm_user_command(call: types.CallbackQuery):
                     data_limit=(user.data_limit or 0) - user.used_traffic + template.data_limit,
                 )
             db_user = crud.update_user(db, db_user, modify)
-            xray.operations.add_user(db_user)
+            xray.sync_ops.add_user(db_user)
             bot.answer_callback_query(call.id, "🔋 User Successfully Charged!")
             bot.edit_message_text(
                 get_user_info_text(db_user),
@@ -1737,7 +1737,7 @@ def confirm_user_command(call: types.CallbackQuery):
             user = UserResponse.model_validate(db_user)
 
             if user.status == UserStatus.active:
-                xray.operations.update_user(db_user)
+                xray.sync_ops.update_user(db_user)
 
             bot.answer_callback_query(call.id, "✅ User updated successfully.")
             bot.edit_message_text(
@@ -1857,7 +1857,7 @@ def confirm_user_command(call: types.CallbackQuery):
                     db_user = crud.create_user(db, new_user)
                     proxies = db_user.proxies
                     user = UserResponse.model_validate(db_user)
-                    xray.operations.add_user(db_user)
+                    xray.sync_ops.add_user(db_user)
                     if mem_store.get(f"{call.message.chat.id}:is_bulk", False):
                         schedule_delete_message(call.message.chat.id, call.message.id)
                         cleanup_messages(call.message.chat.id)
@@ -1922,7 +1922,7 @@ def confirm_user_command(call: types.CallbackQuery):
                 for user in depleted_users:
                     try:
                         crud.remove_user(db, user)
-                        xray.operations.remove_user(user)
+                        xray.sync_ops.remove_user(user)
                         deleted += 1
                         f.write(
                             f'{user.username}\
@@ -2083,7 +2083,7 @@ def confirm_user_command(call: types.CallbackQuery):
                     try:
                         user = crud.update_user(db, user, UserModify(inbounds=new_inbounds, proxies=proxies))
                         if user.status == UserStatus.active:
-                            xray.operations.update_user(user)
+                            xray.sync_ops.update_user(user)
                     except:
                         db.rollback()
                         unsuccessful += 1

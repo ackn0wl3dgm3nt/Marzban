@@ -35,7 +35,7 @@ def core_health_check():
 
 
 @app.on_event("startup")
-def start_core():
+async def start_core():
     logger.info("Generating Xray core config")
 
     start_time = time.time()
@@ -49,16 +49,31 @@ def start_core():
     except Exception:
         traceback.print_exc()
 
+    # Start XrayManager (async)
+    logger.info("Starting XrayManager")
+    try:
+        await xray.xray_manager.start(xray.config)
+    except Exception:
+        traceback.print_exc()
+        logger.error("Failed to start XrayManager, falling back to legacy operations")
+
     # nodes' core
     logger.info("Starting nodes Xray core")
     with GetDB() as db:
         dbnodes = crud.get_nodes(db=db, enabled=True)
-        node_ids = [dbnode.id for dbnode in dbnodes]
         for dbnode in dbnodes:
             crud.update_node_status(db, dbnode, NodeStatus.connecting)
 
-    for node_id in node_ids:
-        xray.operations.connect_node(node_id, config)
+    # Connect nodes: start xray process, then XrayManager for gRPC
+    with GetDB() as db:
+        for dbnode in crud.get_nodes(db=db, enabled=True):
+            xray.operations.connect_node(dbnode.id, config)
+
+            if xray.xray_manager.is_started:
+                try:
+                    await xray.xray_manager.connect_node(dbnode)
+                except Exception as e:
+                    logger.warning(f"XrayManager failed to connect to node {dbnode.id}: {e}")
 
     scheduler.add_job(core_health_check, 'interval',
                       seconds=JOB_CORE_HEALTH_CHECK_INTERVAL,
@@ -66,7 +81,12 @@ def start_core():
 
 
 @app.on_event("shutdown")
-def app_shutdown():
+async def app_shutdown():
+    # Stop XrayManager first (flushes pending operations)
+    if xray.xray_manager.is_started:
+        logger.info("Stopping XrayManager")
+        await xray.xray_manager.stop()
+
     logger.info("Stopping main Xray core")
     xray.core.stop()
 

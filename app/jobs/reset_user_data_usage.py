@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app import logger, scheduler, xray
 from app.db import crud, GetDB, get_users
@@ -13,7 +13,7 @@ reset_strategy_to_days = {
 
 
 def reset_user_data_usage():
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     with GetDB() as db:
         for user in get_users(db,
                               status=[
@@ -35,7 +35,7 @@ def reset_user_data_usage():
             crud.reset_user_data_usage(db, user)
             # make user active if limited on usage reset
             if user.status == UserStatus.limited:
-                xray.operations.add_user(user)
+                xray.sync_ops.add_user(user)
 
             logger.info(f"User data usage reset for User \"{user.username}\"")
 

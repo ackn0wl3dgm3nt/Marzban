@@ -92,9 +92,6 @@ Then, navigate to {click.style(f'http://{UVICORN_HOST}:{UVICORN_PORT}', bold=Tru
         bind_args['uds'] = None
         bind_args['host'] = '0.0.0.0'
 
-    print(f"DEBUG: bind_args = {bind_args}")
-    print(f"DEBUG: UVICORN_HOST = {UVICORN_HOST}")
-
     try:
         uvicorn.run(
             "main:app",

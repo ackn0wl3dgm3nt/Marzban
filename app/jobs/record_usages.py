@@ -1,6 +1,6 @@
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import UTC, datetime
 from operator import attrgetter
 from typing import Union
 
@@ -50,7 +50,7 @@ def record_user_stats(params: list, node_id: Union[int, None],
     if not params:
         return
 
-    created_at = datetime.fromisoformat(datetime.utcnow().strftime('%Y-%m-%dT%H:00:00'))
+    created_at = datetime.fromisoformat(datetime.now(UTC).strftime('%Y-%m-%dT%H:00:00'))
 
     with GetDB() as db:
         # make user usage row if doesn't exist
@@ -87,7 +87,7 @@ def record_node_stats(params: dict, node_id: Union[int, None]):
     if not params:
         return
 
-    created_at = datetime.fromisoformat(datetime.utcnow().strftime('%Y-%m-%dT%H:00:00'))
+    created_at = datetime.fromisoformat(datetime.now(UTC).strftime('%Y-%m-%dT%H:00:00'))
 
     with GetDB() as db:
 
@@ -164,7 +164,7 @@ def record_user_usages():
             where(User.id == bindparam('uid')). \
             values(
                 used_traffic=User.used_traffic + bindparam('value'),
-                online_at=datetime.utcnow()
+                online_at=datetime.now(UTC)
         )
 
         safe_execute(db, stmt, users_usage)

@@ -8,7 +8,7 @@ Create Date: 2024-04-23 09:57:24.697613
 
 from alembic import op
 import sqlalchemy as sa
-from datetime import datetime
+from datetime import UTC, datetime
 
 # revision identifiers, used by Alembic.
 revision = '07f9bbb3db4e'
@@ -35,7 +35,7 @@ def upgrade() -> None:
     update_stmt = (
         sa.update(users_table)
         .where(users_table.c.last_status_change.is_(None))
-        .values(last_status_change=datetime.utcnow())
+        .values(last_status_change=datetime.now(UTC))
     )
     connection.execute(update_stmt)
 

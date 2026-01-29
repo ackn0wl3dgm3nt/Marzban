@@ -1,3 +1,4 @@
+from datetime import UTC
 from datetime import datetime as dt
 from datetime import timedelta as td
 from typing import Any, Dict, List
@@ -60,7 +61,7 @@ def send_notifications():
         while (notification := queue.popleft()):
             if (notification.tries > NUMBER_OF_RECURRENT_NOTIFICATIONS):
                 continue
-            if notification.send_at > dt.utcnow().timestamp():
+            if notification.send_at > dt.now(UTC).timestamp():
                 queue.append(notification)  # add it to the queue again for the next check
                 continue
             notifications_to_send.append(notification)
@@ -75,13 +76,13 @@ def send_notifications():
                 continue
             notification.tries += 1
             notification.send_at = (  # schedule notification for n seconds later
-                dt.utcnow() + td(seconds=RECURRENT_NOTIFICATIONS_TIMEOUT)).timestamp()
+                dt.now(UTC) + td(seconds=RECURRENT_NOTIFICATIONS_TIMEOUT)).timestamp()
             queue.append(notification)
 
 
 def delete_expired_reminders() -> None:
     with GetDB() as db:
-        db.query(NotificationReminder).filter(NotificationReminder.expires_at < dt.utcnow()).delete()
+        db.query(NotificationReminder).filter(NotificationReminder.expires_at < dt.now(UTC)).delete()
         db.commit()
 
 
@@ -95,4 +96,4 @@ if WEBHOOK_ADDRESS:
     scheduler.add_job(send_notifications, "interval",
                       seconds=JOB_SEND_NOTIFICATIONS_INTERVAL,
                       replace_existing=True)
-    scheduler.add_job(delete_expired_reminders, "interval", hours=2, start_date=dt.utcnow() + td(minutes=1))
+    scheduler.add_job(delete_expired_reminders, "interval", hours=2, start_date=dt.now(UTC) + td(minutes=1))

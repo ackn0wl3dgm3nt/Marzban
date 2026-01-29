@@ -62,7 +62,7 @@ def add_user(
         db.rollback()
         raise HTTPException(status_code=409, detail="User already exists")
 
-    bg.add_task(xray.operations.add_user, dbuser=dbuser)
+    bg.add_task(xray.async_ops.add_user, dbuser)
     user = UserResponse.model_validate(dbuser)
     report.user_created(user=user, user_id=dbuser.id, by=admin, user_admin=dbuser.admin)
     logger.info(f'New user "{dbuser.username}" added')
@@ -113,9 +113,9 @@ def modify_user(
     user = UserResponse.model_validate(dbuser)
 
     if user.status in [UserStatus.active, UserStatus.on_hold]:
-        bg.add_task(xray.operations.update_user, dbuser=dbuser)
+        bg.add_task(xray.async_ops.update_user, dbuser)
     else:
-        bg.add_task(xray.operations.remove_user, dbuser=dbuser)
+        bg.add_task(xray.async_ops.remove_user, dbuser)
 
     bg.add_task(report.user_updated, user=user, user_admin=dbuser.admin, by=admin)
 
@@ -146,10 +146,10 @@ def remove_user(
 ):
     """Remove a user"""
     crud.remove_user(db, dbuser)
-    bg.add_task(xray.operations.remove_user, dbuser=dbuser)
+    bg.add_task(xray.async_ops.remove_user, dbuser)
 
     bg.add_task(
-        report.user_deleted, username=dbuser.username, user_admin=Admin.model_validate(dbuser.admin), by=admin
+        report.user_deleted, username=dbuser.username, user_admin=dbuser.admin, by=admin
     )
 
     logger.info(f'User "{dbuser.username}" deleted')
@@ -166,7 +166,7 @@ def reset_user_data_usage(
     """Reset user data usage"""
     dbuser = crud.reset_user_data_usage(db=db, dbuser=dbuser)
     if dbuser.status in [UserStatus.active, UserStatus.on_hold]:
-        bg.add_task(xray.operations.add_user, dbuser=dbuser)
+        bg.add_task(xray.async_ops.add_user, dbuser)
 
     user = UserResponse.model_validate(dbuser)
     bg.add_task(
@@ -188,7 +188,7 @@ def revoke_user_subscription(
     dbuser = crud.revoke_user_sub(db=db, dbuser=dbuser)
 
     if dbuser.status in [UserStatus.active, UserStatus.on_hold]:
-        bg.add_task(xray.operations.update_user, dbuser=dbuser)
+        bg.add_task(xray.async_ops.update_user, dbuser)
     user = UserResponse.model_validate(dbuser)
     bg.add_task(
         report.user_subscription_revoked, user=user, user_admin=dbuser.admin, by=admin
@@ -284,7 +284,7 @@ def active_next_plan(
         )
 
     if dbuser.status in [UserStatus.active, UserStatus.on_hold]:
-        bg.add_task(xray.operations.add_user, dbuser=dbuser)
+        bg.add_task(xray.async_ops.add_user, dbuser)
 
     user = UserResponse.model_validate(dbuser)
     bg.add_task(
