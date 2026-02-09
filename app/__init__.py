@@ -1,4 +1,5 @@
 import logging
+import time
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Request, status
@@ -8,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
-from config import ALLOWED_ORIGINS, DOCS, XRAY_SUBSCRIPTION_PATH
+from config import ALLOWED_ORIGINS, DEBUG, DOCS, XRAY_SUBSCRIPTION_PATH
 
 __version__ = "0.8.4"
 
@@ -32,6 +33,53 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Timing middleware — logs slow requests
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration = time.perf_counter() - start
+
+    # Add timing header
+    response.headers["X-Process-Time"] = f"{duration:.4f}"
+
+    # Log slow requests (>500ms)
+    if duration > 0.5:
+        logger.warning(f"Slow request: {request.method} {request.url.path} took {duration:.2f}s")
+
+    return response
+
+
+# Optional: pyinstrument profiling middleware (only in DEBUG mode)
+if DEBUG:
+    try:
+        from pyinstrument import Profiler
+
+        @app.middleware("http")
+        async def pyinstrument_middleware(request: Request, call_next):
+            # Only profile /api/user endpoints
+            if "/api/user" not in request.url.path:
+                return await call_next(request)
+
+            profiler = Profiler(async_mode="enabled")
+            profiler.start()
+            response = await call_next(request)
+            profiler.stop()
+
+            # Log profile for slow requests (>100ms)
+            duration = float(response.headers.get("X-Process-Time", "0"))
+            if duration > 0.1:
+                logger.info(f"Profile for {request.method} {request.url.path}:\n{profiler.output_text(unicode=True, color=False)}")
+
+            return response
+
+        logger.info("pyinstrument profiling middleware enabled")
+    except ImportError:
+        pass  # pyinstrument not installed
+
+
 from app import dashboard, jobs, routers, telegram  # noqa
 from app.routers import api_router  # noqa
 

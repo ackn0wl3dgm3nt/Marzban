@@ -11,6 +11,7 @@ from app.db import Session, get_db
 from app.models.admin import Admin
 from app.models.core import CoreStats
 from app.utils import responses
+from app.utils.profiler import get_profiler_stats, reset_profiler
 from app.xray import XRayConfig
 from config import XRAY_JSON
 
@@ -130,3 +131,29 @@ def modify_core_config(
     xray.hosts.update()
 
     return payload
+
+
+@router.get("/core/profiler", responses={403: responses._403})
+def get_profiler(admin: Admin = Depends(Admin.check_sudo_admin)) -> dict:
+    """Get profiler statistics for performance analysis."""
+    stats = get_profiler_stats()
+    result = {}
+    for name, stat in sorted(stats.items(), key=lambda x: x[1].total_time, reverse=True):
+        result[name] = {
+            "calls": stat.calls,
+            "total_ms": round(stat.total_time * 1000, 2),
+            "avg_ms": round(stat.avg_time * 1000, 2),
+            "p50_ms": round(stat.p50 * 1000, 2),
+            "p95_ms": round(stat.p95 * 1000, 2),
+            "p99_ms": round(stat.p99 * 1000, 2),
+            "min_ms": round(stat.min_time * 1000, 2),
+            "max_ms": round(stat.max_time * 1000, 2),
+        }
+    return result
+
+
+@router.post("/core/profiler/reset", responses={403: responses._403})
+def reset_profiler_stats(admin: Admin = Depends(Admin.check_sudo_admin)) -> dict:
+    """Reset profiler statistics."""
+    reset_profiler()
+    return {"status": "reset"}

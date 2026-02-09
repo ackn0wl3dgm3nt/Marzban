@@ -10,6 +10,7 @@ import grpc
 import grpc.aio
 
 from app import logger
+from app.utils.profiler import profile
 from app.models.user import UserResponse
 from app.xray.channels import AsyncGrpcChannel, ChannelConfig
 from app.xray.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
@@ -227,6 +228,7 @@ class XrayManager:
 
     # ==================== Batch Execution (Internal) ====================
 
+    @profile("xray.execute_batch")
     async def _execute_batch(self, operations: List[PendingOperation]):
         """Execute a batch of operations."""
         if not operations:
@@ -251,6 +253,7 @@ class XrayManager:
                 op = operations[i]
                 logger.error(f"Operation {op.op_type.value} for user {op.user_id} failed: {result}")
 
+    @profile("xray.do_add_user")
     async def _do_add_user(self, dbuser: "DBUser"):
         """Add user to main core and all nodes."""
         user = UserResponse.model_validate(dbuser)
@@ -273,6 +276,7 @@ class XrayManager:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
+    @profile("xray.do_update_user")
     async def _do_update_user(self, dbuser: "DBUser"):
         """Update user on main core and all nodes."""
         user = UserResponse.model_validate(dbuser)
@@ -309,6 +313,7 @@ class XrayManager:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
+    @profile("xray.do_remove_user")
     async def _do_remove_user(self, dbuser: "DBUser"):
         """Remove user from all inbounds on main core and all nodes."""
         email = f"{dbuser.id}.{dbuser.username}"
@@ -329,6 +334,7 @@ class XrayManager:
 
     # ==================== Low-level gRPC Operations ====================
 
+    @profile("xray.grpc_add")
     async def _add_to_channel(
         self,
         channel: AsyncGrpcChannel,
@@ -372,6 +378,7 @@ class XrayManager:
                 await self._circuit_breaker.record_failure(node_id)
             raise
 
+    @profile("xray.grpc_remove")
     async def _remove_from_channel(
         self,
         channel: AsyncGrpcChannel,

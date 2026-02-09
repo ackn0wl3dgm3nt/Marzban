@@ -43,6 +43,7 @@ from app.models.user import (
 )
 from app.models.user_template import UserTemplateCreate, UserTemplateModify
 from app.utils.helpers import calculate_expiration_days, calculate_usage_percent
+from app.utils.profiler import profile
 from config import NOTIFY_DAYS_LEFT, NOTIFY_REACHED_USAGE_PERCENT, USERS_AUTODELETE_DAYS
 
 
@@ -354,6 +355,7 @@ def get_users_count(db: Session, status: UserStatus = None, admin: Admin = None)
     return query.count()
 
 
+@profile("crud.create_user")
 def create_user(db: Session, user: UserCreate, admin: Admin = None) -> User:
     """
     Creates a new user with provided details.
@@ -403,6 +405,7 @@ def create_user(db: Session, user: UserCreate, admin: Admin = None) -> User:
     return dbuser
 
 
+@profile("crud.remove_user")
 def remove_user(db: Session, dbuser: User) -> User:
     """
     Removes a user from the database.
@@ -433,6 +436,7 @@ def remove_users(db: Session, dbusers: List[User]):
     return
 
 
+@profile("crud.update_user")
 def update_user(db: Session, dbuser: User, modify: UserModify) -> User:
     """
     Updates a user with new details.

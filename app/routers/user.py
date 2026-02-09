@@ -18,11 +18,13 @@ from app.models.user import (
     UserUsagesResponse,
 )
 from app.utils import report, responses
+from app.utils.profiler import profile
 
 router = APIRouter(tags=["User"], prefix="/api", responses={401: responses._401})
 
 
 @router.post("/user", response_model=UserResponse, responses={400: responses._400, 409: responses._409})
+@profile("route.add_user")
 def add_user(
     new_user: UserCreate,
     bg: BackgroundTasks,
@@ -76,6 +78,7 @@ def get_user(dbuser: UserResponse = Depends(get_validated_user)):
 
 
 @router.put("/user/{username}", response_model=UserResponse, responses={400: responses._400, 403: responses._403, 404: responses._404})
+@profile("route.modify_user")
 def modify_user(
     modified_user: UserModify,
     bg: BackgroundTasks,
@@ -138,6 +141,7 @@ def modify_user(
 
 
 @router.delete("/user/{username}", responses={403: responses._403, 404: responses._404})
+@profile("route.remove_user")
 def remove_user(
     bg: BackgroundTasks,
     db: Session = Depends(get_db),

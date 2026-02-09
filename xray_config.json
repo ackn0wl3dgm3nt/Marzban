@@ -17,7 +17,7 @@
     {
       "tag": "Shadowsocks TCP",
       "listen": "0.0.0.0",
-      "port": 1080,
+      "port": 2080,
       "protocol": "shadowsocks",
       "settings": {
         "clients": [],
