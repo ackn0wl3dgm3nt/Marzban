@@ -1512,6 +1512,7 @@ def _user_select():
         joinedload(User.admin),
         joinedload(User.next_plan),
         selectinload(User.proxies).selectinload(Proxy.excluded_inbounds),
+        selectinload(User.usage_logs),
     )
 
 
@@ -1575,7 +1576,6 @@ async def async_delete_notification_reminder(db, dbreminder: NotificationReminde
     await db.flush()
 
 
-@profile("crud.create_user")
 async def async_create_user(db, user: UserCreate, admin: Admin = None) -> User:
     excluded_inbounds_tags = user.excluded_inbounds
     proxies = []
@@ -1610,18 +1610,18 @@ async def async_create_user(db, user: UserCreate, admin: Admin = None) -> User:
     )
     db.add(dbuser)
     await db.commit()
-    await db.refresh(dbuser)
-    return dbuser
+    # Re-query with eager loading to avoid MissingGreenlet on relationship access
+    stmt = _user_select().where(User.id == dbuser.id)
+    result = await db.execute(stmt)
+    return result.scalar_one()
 
 
-@profile("crud.remove_user")
 async def async_remove_user(db, dbuser: User) -> User:
     await db.delete(dbuser)
     await db.commit()
     return dbuser
 
 
-@profile("crud.update_user")
 async def async_update_user(db, dbuser: User, modify: UserModify) -> User:
     added_proxies: Dict[ProxyTypes, Proxy] = {}
     if modify.proxies:
@@ -1706,8 +1706,10 @@ async def async_update_user(db, dbuser: User, modify: UserModify) -> User:
     dbuser.edit_at = datetime.now(UTC)
 
     await db.commit()
-    await db.refresh(dbuser)
-    return dbuser
+    # Re-query with eager loading to avoid MissingGreenlet on relationship access
+    stmt = _user_select().where(User.id == dbuser.id)
+    result = await db.execute(stmt)
+    return result.scalar_one()
 
 
 async def async_get_users(

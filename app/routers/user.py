@@ -23,12 +23,7 @@ router = APIRouter(tags=["User"], prefix="/api", responses={401: responses._401}
 
 
 @router.post("/user", response_model=UserResponse, responses={400: responses._400, 409: responses._409})
-<<<<<<< Updated upstream
-def add_user(
-=======
-@profile("route.add_user")
 async def add_user(
->>>>>>> Stashed changes
     new_user: UserCreate,
     bg: BackgroundTasks,
     db=Depends(get_async_db),
@@ -80,12 +75,7 @@ async def get_user(dbuser: UserResponse = Depends(async_get_validated_user)):
 
 
 @router.put("/user/{username}", response_model=UserResponse, responses={400: responses._400, 403: responses._403, 404: responses._404})
-<<<<<<< Updated upstream
-def modify_user(
-=======
-@profile("route.modify_user")
 async def modify_user(
->>>>>>> Stashed changes
     modified_user: UserModify,
     bg: BackgroundTasks,
     db=Depends(get_async_db),
@@ -147,12 +137,7 @@ async def modify_user(
 
 
 @router.delete("/user/{username}", responses={403: responses._403, 404: responses._404})
-<<<<<<< Updated upstream
-def remove_user(
-=======
-@profile("route.remove_user")
 async def remove_user(
->>>>>>> Stashed changes
     bg: BackgroundTasks,
     db=Depends(get_async_db),
     dbuser: UserResponse = Depends(async_get_validated_user),

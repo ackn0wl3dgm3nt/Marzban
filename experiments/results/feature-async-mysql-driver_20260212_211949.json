@@ -1,0 +1,95 @@
+{
+  "url": "http://localhost:8080",
+  "timestamp": "2026-02-12 21:19:49",
+  "params": {
+    "users": 500,
+    "concurrent": 50
+  },
+  "server": {
+    "system": {
+      "version": "0.8.4",
+      "mem_total": 16689491968,
+      "mem_used": 2607656960,
+      "cpu_cores": 16,
+      "cpu_usage": 2.9,
+      "total_user": 0,
+      "online_users": 0,
+      "users_active": 0,
+      "users_on_hold": 0,
+      "users_disabled": 0,
+      "users_expired": 0,
+      "users_limited": 0,
+      "incoming_bandwidth": 0,
+      "outgoing_bandwidth": 0,
+      "incoming_bandwidth_speed": 0,
+      "outgoing_bandwidth_speed": 0
+    },
+    "nodes": [],
+    "inbounds": {
+      "shadowsocks": [
+        {
+          "tag": "Shadowsocks TCP",
+          "protocol": "shadowsocks",
+          "network": "tcp",
+          "tls": "none",
+          "port": 1080
+        }
+      ]
+    },
+    "total_users": 0
+  },
+  "results": [
+    {
+      "operation": "CREATE users",
+      "total": 500,
+      "success": 500,
+      "failed": 0,
+      "elapsed_s": 6.0323780000035185,
+      "rps": 82.88605256496001,
+      "avg_ms": 570.507883000013,
+      "p50_ms": 572.3150499979965,
+      "p95_ms": 753.74130000273,
+      "p99_ms": 779.5144999981858
+    },
+    {
+      "operation": "SWITCH active -> disabled",
+      "total": 500,
+      "success": 500,
+      "failed": 0,
+      "elapsed_s": 8.09056640000199,
+      "rps": 61.800370367132395,
+      "avg_ms": 763.4287775998673,
+      "p50_ms": 760.8759499998996,
+      "p95_ms": 919.9195000037435,
+      "p99_ms": 1072.3317000010866
+    },
+    {
+      "operation": "SWITCH disabled -> active",
+      "total": 500,
+      "success": 500,
+      "failed": 0,
+      "elapsed_s": 8.240083800003049,
+      "rps": 60.67899455097957,
+      "avg_ms": 781.3758749999688,
+      "p50_ms": 775.0312500029395,
+      "p95_ms": 918.9174999992247,
+      "p99_ms": 1071.170200004417
+    },
+    {
+      "operation": "DELETE users",
+      "total": 0,
+      "success": 0,
+      "failed": 0,
+      "elapsed_s": 0.0,
+      "rps": 0,
+      "avg_ms": 0,
+      "p50_ms": 0,
+      "p95_ms": 0,
+      "p99_ms": 0
+    }
+  ],
+  "profiler": {
+    "disable": {},
+    "enable": {}
+  }
+}
