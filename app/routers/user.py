@@ -278,7 +278,7 @@ async def active_next_plan(
     """Reset user by next plan"""
     dbuser = await crud.async_reset_user_by_next(db=db, dbuser=dbuser)
 
-    if (dbuser is None or dbuser.next_plan is None):
+    if dbuser is None:
         raise HTTPException(
             status_code=404,
             detail=f"User doesn't have next plan",

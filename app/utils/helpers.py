@@ -9,7 +9,7 @@ def calculate_usage_percent(used_traffic: int, data_limit: int) -> float:
 
 
 def calculate_expiration_days(expire: int) -> int:
-    return (dt.fromtimestamp(expire) - dt.now(UTC)).days
+    return (dt.fromtimestamp(expire, tz=UTC) - dt.now(UTC)).days
 
 
 def yml_uuid_representer(dumper, data):

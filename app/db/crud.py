@@ -1509,8 +1509,8 @@ def count_online_users(db: Session, hours: int = 24):
 def _user_select():
     """Base select statement for User with eager-loaded relations."""
     return select(User).options(
-        joinedload(User.admin),
-        joinedload(User.next_plan),
+        selectinload(User.admin),
+        selectinload(User.next_plan),
         selectinload(User.proxies).selectinload(Proxy.excluded_inbounds),
         selectinload(User.usage_logs),
     )
@@ -1792,8 +1792,9 @@ async def async_reset_user_data_usage(db, dbuser: User) -> User:
     db.add(dbuser)
 
     await db.commit()
-    await db.refresh(dbuser)
-    return dbuser
+    stmt = _user_select().where(User.id == dbuser.id)
+    result = await db.execute(stmt)
+    return result.scalar_one()
 
 
 async def async_revoke_user_sub(db, dbuser: User) -> User:
@@ -1806,8 +1807,9 @@ async def async_revoke_user_sub(db, dbuser: User) -> User:
     dbuser = await async_update_user(db, dbuser, user)
 
     await db.commit()
-    await db.refresh(dbuser)
-    return dbuser
+    stmt = _user_select().where(User.id == dbuser.id)
+    result = await db.execute(stmt)
+    return result.scalar_one()
 
 
 async def async_reset_user_by_next(db, dbuser: User) -> User:
@@ -1823,8 +1825,11 @@ async def async_reset_user_by_next(db, dbuser: User) -> User:
     await db.execute(delete(NodeUserUsage).where(NodeUserUsage.user_id == dbuser.id))
     dbuser.status = UserStatus.active.value
 
-    dbuser.data_limit = dbuser.next_plan.data_limit + \
-        (0 if dbuser.next_plan.add_remaining_traffic else dbuser.data_limit - dbuser.used_traffic)
+    if not dbuser.next_plan.add_remaining_traffic and dbuser.data_limit is not None:
+        extra = dbuser.data_limit - dbuser.used_traffic
+    else:
+        extra = 0
+    dbuser.data_limit = dbuser.next_plan.data_limit + extra
     dbuser.expire = dbuser.next_plan.expire
 
     dbuser.used_traffic = 0
@@ -1833,15 +1838,17 @@ async def async_reset_user_by_next(db, dbuser: User) -> User:
     db.add(dbuser)
 
     await db.commit()
-    await db.refresh(dbuser)
-    return dbuser
+    stmt = _user_select().where(User.id == dbuser.id)
+    result = await db.execute(stmt)
+    return result.scalar_one()
 
 
 async def async_set_owner(db, dbuser: User, admin: Admin) -> User:
     dbuser.admin = admin
     await db.commit()
-    await db.refresh(dbuser)
-    return dbuser
+    stmt = _user_select().where(User.id == dbuser.id)
+    result = await db.execute(stmt)
+    return result.scalar_one()
 
 
 async def async_get_user_usages(
