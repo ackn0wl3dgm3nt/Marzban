@@ -1,0 +1,207 @@
+{
+  "url": "http://localhost:8000",
+  "timestamp": "2026-02-12 19:48:12",
+  "params": {
+    "users": 500,
+    "concurrent": 50
+  },
+  "server": {
+    "system": {
+      "version": "0.8.4",
+      "mem_total": 16689491968,
+      "mem_used": 1531523072,
+      "cpu_cores": 16,
+      "cpu_usage": 3.0,
+      "total_user": 72601,
+      "online_users": 0,
+      "users_active": 72601,
+      "users_on_hold": 0,
+      "users_disabled": 0,
+      "users_expired": 0,
+      "users_limited": 0,
+      "incoming_bandwidth": 0,
+      "outgoing_bandwidth": 0,
+      "incoming_bandwidth_speed": 0,
+      "outgoing_bandwidth_speed": 0
+    },
+    "nodes": [],
+    "inbounds": {
+      "shadowsocks": [
+        {
+          "tag": "Shadowsocks TCP",
+          "protocol": "shadowsocks",
+          "network": "tcp",
+          "tls": "none",
+          "port": 2080
+        }
+      ]
+    },
+    "total_users": 72601
+  },
+  "results": [
+    {
+      "operation": "CREATE users",
+      "total": 500,
+      "success": 500,
+      "failed": 0,
+      "elapsed_s": 4.975349399996048,
+      "rps": 100.49545465096324,
+      "avg_ms": 464.72131500007526,
+      "p50_ms": 426.3801999986754,
+      "p95_ms": 945.6960000024992,
+      "p99_ms": 966.9007000047714
+    },
+    {
+      "operation": "SWITCH active -> disabled",
+      "total": 500,
+      "success": 500,
+      "failed": 0,
+      "elapsed_s": 14.65761389999534,
+      "rps": 34.11196415810618,
+      "avg_ms": 1398.1849641997833,
+      "p50_ms": 1464.191999999457,
+      "p95_ms": 1695.9621999994852,
+      "p99_ms": 1757.0517999993172
+    },
+    {
+      "operation": "SWITCH disabled -> active",
+      "total": 500,
+      "success": 500,
+      "failed": 0,
+      "elapsed_s": 15.097469899999851,
+      "rps": 33.11813193282173,
+      "avg_ms": 1431.5242124000506,
+      "p50_ms": 1488.8340500037884,
+      "p95_ms": 1777.0848000000115,
+      "p99_ms": 1989.6568999974988
+    },
+    {
+      "operation": "DELETE users",
+      "total": 0,
+      "success": 0,
+      "failed": 0,
+      "elapsed_s": 0.0,
+      "rps": 0,
+      "avg_ms": 0,
+      "p50_ms": 0,
+      "p95_ms": 0,
+      "p99_ms": 0
+    }
+  ],
+  "profiler": {
+    "disable": {
+      "route.modify_user": {
+        "calls": 500,
+        "total_ms": 166642.81,
+        "avg_ms": 333.29,
+        "p50_ms": 357.31,
+        "p95_ms": 535.27,
+        "p99_ms": 576.24,
+        "min_ms": 32.63,
+        "max_ms": 613.11
+      },
+      "crud.update_user": {
+        "calls": 500,
+        "total_ms": 88985.43,
+        "avg_ms": 177.97,
+        "p50_ms": 185.28,
+        "p95_ms": 278.67,
+        "p99_ms": 339.1,
+        "min_ms": 18.97,
+        "max_ms": 384.09
+      },
+      "xray.do_remove_user": {
+        "calls": 500,
+        "total_ms": 47690.69,
+        "avg_ms": 95.38,
+        "p50_ms": 103.77,
+        "p95_ms": 176.21,
+        "p99_ms": 251.25,
+        "min_ms": 4.75,
+        "max_ms": 253.49
+      },
+      "xray.grpc_remove": {
+        "calls": 500,
+        "total_ms": 25226.49,
+        "avg_ms": 50.45,
+        "p50_ms": 44.62,
+        "p95_ms": 95.76,
+        "p99_ms": 151.53,
+        "min_ms": 1.25,
+        "max_ms": 169.33
+      },
+      "xray.execute_batch": {
+        "calls": 45,
+        "total_ms": 5483.82,
+        "avg_ms": 121.86,
+        "p50_ms": 118.33,
+        "p95_ms": 339.87,
+        "p99_ms": 354.25,
+        "min_ms": 7.44,
+        "max_ms": 354.25
+      }
+    },
+    "enable": {
+      "route.modify_user": {
+        "calls": 500,
+        "total_ms": 176953.86,
+        "avg_ms": 353.91,
+        "p50_ms": 383.76,
+        "p95_ms": 584.95,
+        "p99_ms": 630.73,
+        "min_ms": 32.12,
+        "max_ms": 658.16
+      },
+      "crud.update_user": {
+        "calls": 500,
+        "total_ms": 91371.26,
+        "avg_ms": 182.74,
+        "p50_ms": 184.89,
+        "p95_ms": 298.26,
+        "p99_ms": 339.69,
+        "min_ms": 24.15,
+        "max_ms": 399.88
+      },
+      "xray.do_update_user": {
+        "calls": 500,
+        "total_ms": 63753.24,
+        "avg_ms": 127.51,
+        "p50_ms": 122.4,
+        "p95_ms": 315.25,
+        "p99_ms": 383.73,
+        "min_ms": 10.83,
+        "max_ms": 392.76
+      },
+      "xray.grpc_remove": {
+        "calls": 500,
+        "total_ms": 32468.67,
+        "avg_ms": 64.94,
+        "p50_ms": 60.02,
+        "p95_ms": 113.93,
+        "p99_ms": 229.26,
+        "min_ms": 2.72,
+        "max_ms": 229.53
+      },
+      "xray.grpc_add": {
+        "calls": 500,
+        "total_ms": 16458.56,
+        "avg_ms": 32.92,
+        "p50_ms": 31.94,
+        "p95_ms": 81.5,
+        "p99_ms": 140.03,
+        "min_ms": 0.8,
+        "max_ms": 194.03
+      },
+      "xray.execute_batch": {
+        "calls": 42,
+        "total_ms": 7018.9,
+        "avg_ms": 167.12,
+        "p50_ms": 149.24,
+        "p95_ms": 450.21,
+        "p99_ms": 534.39,
+        "min_ms": 11.46,
+        "max_ms": 534.39
+      }
+    }
+  }
+}

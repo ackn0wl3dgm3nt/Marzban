@@ -1,0 +1,54 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: marzban
+      MYSQL_USER: marzban
+      MYSQL_PASSWORD: marzban123
+    volumes:
+      - bench_mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  marzban:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      UVICORN_HOST: "0.0.0.0"
+      UVICORN_PORT: "8000"
+      SUDO_USERNAME: "admin"
+      SUDO_PASSWORD: "admin"
+      SQLALCHEMY_DATABASE_URL: "mysql+pymysql://marzban:marzban123@mysql:3306/marzban"
+      SQLALCHEMY_POOL_SIZE: "30"
+      SQLIALCHEMY_MAX_OVERFLOW: "70"
+      XRAY_JSON: "xray_config.json"
+      XRAY_EXECUTABLE_PATH: "/usr/local/bin/xray"
+      XRAY_ASSETS_PATH: "/usr/local/share/xray"
+      XRAY_SUBSCRIPTION_URL_PREFIX: "https://example.com"
+      XRAY_SUBSCRIPTION_PATH: "sub"
+      DOCS: "True"
+      JOB_CORE_HEALTH_CHECK_INTERVAL: "10"
+      JOB_RECORD_NODE_USAGES_INTERVAL: "30"
+      JOB_RECORD_USER_USAGES_INTERVAL: "10"
+      JOB_REVIEW_USERS_INTERVAL: "10"
+      JOB_SEND_NOTIFICATIONS_INTERVAL: "30"
+    volumes:
+      - bench_marzban_data:/var/lib/marzban
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  bench_mysql_data:
+  bench_marzban_data:

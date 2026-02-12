@@ -1,23 +1,18 @@
 # Benchmark: feature/xray-manager (Baseline)
 
 **Branch:** `feature/xray-manager`
-**Date:** 2026-02-12
-**Commit:** `1e365aa` — XrayManager with node connection rework
+**Date:** 2026-02-12 19:48:12
+**Commit:** `1e365aa`
 
 ## Environment
 
 | Parameter | Value |
 |-----------|-------|
-| OS | Windows 11 Pro (Docker Desktop) |
 | CPU | 16 cores |
-| RAM | 16 GB |
-| Database | MySQL 8.0 (docker, pymysql sync driver) |
-| DB Pool | pool_size=10, max_overflow=30 |
-| Python | 3.12 |
-| Marzban | 0.8.4 (custom XrayManager branch) |
+| RAM | 15.5 GB |
 | Existing users | 72,601 |
-| Nodes | master only |
-| Inbounds | shadowsocks (TCP/2080) |
+| Nodes | 0 (master only) |
+| Inbounds | shadowsocks (1) |
 
 ## Test Parameters
 
@@ -25,7 +20,6 @@
 |-----------|-------|
 | Test users | 500 |
 | Concurrency | 50 |
-| Benchmark tool | `tests/staging/benchmark.py` (httpx async client) |
 
 ## Results
 
@@ -37,59 +31,50 @@
 | SWITCH active -> disabled | 500 | 500 (100%) | **34.1** | 1398.2 | 1464.2 | 1696.0 | 1757.1 |
 | SWITCH disabled -> active | 500 | 500 (100%) | **33.1** | 1431.5 | 1488.8 | 1777.1 | 1989.7 |
 
-### Profiler Breakdown: DISABLE (active -> disabled)
+### Profiler: DISABLE (active -> disabled)
 
 | Component | Calls | Avg (ms) | P95 (ms) | P99 (ms) | % of Route |
 |-----------|-------|----------|----------|----------|------------|
-| **route.modify_user** | 500 | 333.3 | 535.3 | 576.2 | 100% |
-| crud.update_user | 500 | 178.0 | 278.7 | 339.1 | **53.4%** |
-| xray.do_remove_user | 500 | 95.4 | 176.2 | 251.3 | 28.6% |
+| **route.modify_user** | 500 | 333.3 | 535.3 | 576.2 | 100.0% |
+| **crud.update_user** | 500 | 178.0 | 278.7 | 339.1 | 53.4% |
+| xray.do_remove_user | 500 | 95.4 | 176.2 | 251.2 | 28.6% |
 | xray.grpc_remove | 500 | 50.5 | 95.8 | 151.5 | 15.1% |
-| xray.execute_batch | 45 | 121.9 | 339.9 | 354.3 | — |
+| xray.execute_batch | 45 | 121.9 | 339.9 | 354.2 | 36.6% |
 
-### Profiler Breakdown: ENABLE (disabled -> active)
+### Profiler: ENABLE (disabled -> active)
 
 | Component | Calls | Avg (ms) | P95 (ms) | P99 (ms) | % of Route |
 |-----------|-------|----------|----------|----------|------------|
-| **route.modify_user** | 500 | 353.9 | 585.0 | 630.7 | 100% |
-| crud.update_user | 500 | 182.7 | 298.3 | 339.7 | **51.6%** |
-| xray.do_update_user | 500 | 127.5 | 315.3 | 383.7 | 36.0% |
+| **route.modify_user** | 500 | 353.9 | 585.0 | 630.7 | 100.0% |
+| **crud.update_user** | 500 | 182.7 | 298.3 | 339.7 | 51.6% |
+| xray.do_update_user | 500 | 127.5 | 315.2 | 383.7 | 36.0% |
 | xray.grpc_remove | 500 | 64.9 | 113.9 | 229.3 | 18.3% |
 | xray.grpc_add | 500 | 32.9 | 81.5 | 140.0 | 9.3% |
-| xray.execute_batch | 42 | 167.1 | 450.2 | 534.4 | — |
+| xray.execute_batch | 42 | 167.1 | 450.2 | 534.4 | 47.2% |
 
 ## Analysis
 
-### Bottleneck: Database (pymysql sync driver)
-
+**DISABLE breakdown:**
 ```
-Route total:   333 - 354 ms avg
-  DB/CRUD:     178 - 183 ms (52-53%)  <-- BOTTLENECK
-  XrayManager:  95 - 128 ms (29-36%)
-  gRPC:         50 -  65 ms (15-18%)
+Route total:   333 ms
+  DB/CRUD:     178 ms (53%)
+  XrayManager: 122 ms (37%)
+  gRPC:        50 ms (15%)
 ```
 
-The synchronous `pymysql` driver blocks the event loop on every DB query. With concurrency=50, requests serialize on DB access because:
+**ENABLE breakdown:**
+```
+Route total:   354 ms
+  DB/CRUD:     183 ms (52%)
+  XrayManager: 167 ms (47%)
+  gRPC:        65 ms (18%)
+```
 
-1. **pymysql is blocking** — each `db.query()` / `db.commit()` blocks the entire event loop thread
-2. **pool_size=10** limits parallel DB connections, but even with pool_size=30 no improvement was observed
-3. Under 50 concurrent requests, effective throughput caps at **~34 RPS**
-
-### Key Metrics (for comparison with async-mysql-driver)
+### Key Metrics
 
 | Metric | Value |
 |--------|-------|
-| **SWITCH RPS** | 33-34 |
-| **Route avg latency** | 333-354 ms |
-| **DB/CRUD avg latency** | 178-183 ms |
-| **DB share of route** | 52-53% |
-
-## Reproduce
-
-```bash
-docker compose -f docker-compose.mysql.yml up -d
-python tests/staging/benchmark.py \
-  --url http://localhost:8000 \
-  --login admin --password admin \
-  --users 500 --concurrent 50
-```
+| SWITCH RPS | 33 - 34 |
+| Route avg latency | 1398 - 1432 ms |
+| DB/CRUD avg (disable) | 178 ms |
+| DB/CRUD avg (enable) | 183 ms |
