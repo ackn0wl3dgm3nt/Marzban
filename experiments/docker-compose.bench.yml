@@ -44,7 +44,7 @@ services:
     volumes:
       - bench_marzban_data:/var/lib/marzban
     ports:
-      - "8000:8000"
+      - "8080:8000"
     depends_on:
       mysql:
         condition: service_healthy
