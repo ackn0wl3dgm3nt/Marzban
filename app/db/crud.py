@@ -1509,8 +1509,8 @@ def count_online_users(db: Session, hours: int = 24):
 def _user_select():
     """Base select statement for User with eager-loaded relations."""
     return select(User).options(
-        selectinload(User.admin),
-        selectinload(User.next_plan),
+        joinedload(User.admin),
+        joinedload(User.next_plan),
         selectinload(User.proxies).selectinload(Proxy.excluded_inbounds),
         selectinload(User.usage_logs),
     )
@@ -1535,8 +1535,23 @@ async def async_get_or_create_inbound(db, inbound_tag: str) -> ProxyInbound:
     return inbound
 
 
+def _user_select_lite():
+    """Minimal select: admin + next_plan via LEFT JOIN for permission checks."""
+    return select(User).options(
+        joinedload(User.admin),
+        joinedload(User.next_plan),
+    )
+
+
 async def async_get_user(db, username: str) -> Optional[User]:
     stmt = _user_select().where(User.username == username)
+    result = await db.execute(stmt)
+    return result.unique().scalar_one_or_none()
+
+
+async def async_get_user_lite(db, username: str) -> Optional[User]:
+    """Get user with only admin and next_plan loaded (1 query with LEFT JOINs)."""
+    stmt = _user_select_lite().where(User.username == username)
     result = await db.execute(stmt)
     return result.unique().scalar_one_or_none()
 
@@ -1632,10 +1647,13 @@ async def async_update_user(db, dbuser: User, modify: UserModify) -> User:
             if dbproxy:
                 dbproxy.settings = settings.dict(no_obj=True)
             else:
-                new_proxy = Proxy(type=proxy_type, settings=settings.dict(no_obj=True))
-                dbuser.proxies.append(new_proxy)
+                new_proxy = Proxy(type=proxy_type, settings=settings.dict(no_obj=True), user_id=dbuser.id)
+                db.add(new_proxy)
                 added_proxies.update({proxy_type: new_proxy})
-        for proxy in dbuser.proxies:
+        # Explicit query to delete removed proxies (avoids lazy-load of dbuser.proxies)
+        del_stmt = select(Proxy).where(Proxy.user_id == dbuser.id)
+        del_result = await db.execute(del_stmt)
+        for proxy in del_result.scalars().all():
             if proxy.type not in modify.proxies:
                 await db.delete(proxy)
     if modify.inbounds:

@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app import logger, xray
 from app.db import crud, get_async_db
-from app.dependencies import async_get_validated_user, async_get_expired_users_list, validate_dates
+from app.dependencies import async_get_validated_user, async_get_validated_user_lite, async_get_expired_users_list, validate_dates
 from app.models.admin import Admin
 from app.models.user import (
     UserCreate,
@@ -79,7 +79,7 @@ async def modify_user(
     modified_user: UserModify,
     bg: BackgroundTasks,
     db=Depends(get_async_db),
-    dbuser: UsersResponse = Depends(async_get_validated_user),
+    dbuser: UsersResponse = Depends(async_get_validated_user_lite),
     admin: Admin = Depends(Admin.async_get_current),
 ):
     """
@@ -140,7 +140,7 @@ async def modify_user(
 async def remove_user(
     bg: BackgroundTasks,
     db=Depends(get_async_db),
-    dbuser: UserResponse = Depends(async_get_validated_user),
+    dbuser: UserResponse = Depends(async_get_validated_user_lite),
     admin: Admin = Depends(Admin.async_get_current),
 ):
     """Remove a user"""
@@ -159,7 +159,7 @@ async def remove_user(
 async def reset_user_data_usage(
     bg: BackgroundTasks,
     db=Depends(get_async_db),
-    dbuser: UserResponse = Depends(async_get_validated_user),
+    dbuser: UserResponse = Depends(async_get_validated_user_lite),
     admin: Admin = Depends(Admin.async_get_current),
 ):
     """Reset user data usage"""
@@ -256,7 +256,7 @@ def reset_users_data_usage(
 
 @router.get("/user/{username}/usage", response_model=UserUsagesResponse, responses={403: responses._403, 404: responses._404})
 async def get_user_usage(
-    dbuser: UserResponse = Depends(async_get_validated_user),
+    dbuser: UserResponse = Depends(async_get_validated_user_lite),
     start: str = "",
     end: str = "",
     db=Depends(get_async_db),
@@ -273,7 +273,7 @@ async def get_user_usage(
 async def active_next_plan(
     bg: BackgroundTasks,
     db=Depends(get_async_db),
-    dbuser: UserResponse = Depends(async_get_validated_user),
+    dbuser: UserResponse = Depends(async_get_validated_user_lite),
 ):
     """Reset user by next plan"""
     dbuser = await crud.async_reset_user_by_next(db=db, dbuser=dbuser)
@@ -317,7 +317,7 @@ async def get_users_usage(
 @router.put("/user/{username}/set-owner", response_model=UserResponse)
 async def set_owner(
     admin_username: str,
-    dbuser: UserResponse = Depends(async_get_validated_user),
+    dbuser: UserResponse = Depends(async_get_validated_user_lite),
     db=Depends(get_async_db),
     admin: Admin = Depends(Admin.async_check_sudo_admin),
 ):

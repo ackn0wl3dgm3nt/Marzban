@@ -130,6 +130,22 @@ async def async_get_validated_user(
     return dbuser
 
 
+async def async_get_validated_user_lite(
+    username: str,
+    admin: Admin = Depends(Admin.async_get_current),
+    db=Depends(get_async_db),
+) -> UserResponse:
+    """Lightweight user validation: loads only admin + next_plan (1 query)."""
+    dbuser = await crud.async_get_user_lite(db, username)
+    if not dbuser:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not (admin.is_sudo or (dbuser.admin and dbuser.admin.username == admin.username)):
+        raise HTTPException(status_code=403, detail="You're not allowed")
+
+    return dbuser
+
+
 async def async_get_expired_users_list(db, admin: Admin, expired_after: Optional[datetime] = None,
                                        expired_before: Optional[datetime] = None):
     expired_before = expired_before or datetime.now(timezone.utc)
