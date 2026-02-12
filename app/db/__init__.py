@@ -1,7 +1,7 @@
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from .base import Base, SessionLocal, engine  # noqa
+from .base import Base, SessionLocal, engine, AsyncSessionLocal  # noqa
 
 
 class GetDB:  # Context Manager
@@ -23,6 +23,21 @@ def get_db():  # Dependency
         yield db
 
 
+async def get_async_db():
+    """Async DB dependency for route handlers. Falls back to sync if SQLite."""
+    if AsyncSessionLocal is None:
+        # SQLite fallback: yield sync session
+        with GetDB() as db:
+            yield db
+        return
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        except SQLAlchemyError:
+            await session.rollback()
+            raise
+
+
 from .crud import (create_admin, create_notification_reminder,  # noqa
                    create_user, delete_notification_reminder, get_admin,
                    get_admins, get_jwt_secret_key, get_notification_reminder,
@@ -31,7 +46,21 @@ from .crud import (create_admin, create_notification_reminder,  # noqa
                    get_users_count, remove_admin, remove_user, revoke_user_sub,
                    set_owner, update_admin, update_user, update_user_status, reset_user_by_next,
                    update_user_sub, start_user_expire, get_admin_by_id,
-                   get_admin_by_telegram_id)
+                   get_admin_by_telegram_id,
+                   # Async versions for route handlers
+                   async_get_user, async_create_user, async_update_user,
+                   async_remove_user, async_get_users,
+                   async_get_or_create_inbound,
+                   async_get_notification_reminder,
+                   async_delete_notification_reminder,
+                   async_get_admin,
+                   async_reset_user_data_usage,
+                   async_revoke_user_sub,
+                   async_reset_user_by_next,
+                   async_set_owner,
+                   async_get_user_usages,
+                   async_get_all_users_usages,
+                   )
 
 from .models import JWT, System, User  # noqa
 
@@ -67,6 +96,24 @@ __all__ = [
 
     "GetDB",
     "get_db",
+    "get_async_db",
+
+    # Async CRUD
+    "async_get_user",
+    "async_create_user",
+    "async_update_user",
+    "async_remove_user",
+    "async_get_users",
+    "async_get_or_create_inbound",
+    "async_get_notification_reminder",
+    "async_delete_notification_reminder",
+    "async_get_admin",
+    "async_reset_user_data_usage",
+    "async_revoke_user_sub",
+    "async_reset_user_by_next",
+    "async_set_owner",
+    "async_get_user_usages",
+    "async_get_all_users_usages",
 
     "User",
     "System",

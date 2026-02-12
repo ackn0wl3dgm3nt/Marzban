@@ -5,7 +5,7 @@ from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from app.db import Session, crud, get_db
+from app.db import Session, crud, get_db, get_async_db
 from app.utils.jwt import get_admin_payload
 from config import SUDOERS
 
@@ -75,6 +75,58 @@ class Admin(BaseModel):
                          db: Session = Depends(get_db),
                          token: str = Depends(oauth2_scheme)):
         admin = cls.get_admin(token, db)
+        if not admin:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if not admin.is_sudo:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You're not allowed"
+            )
+        return admin
+
+    @classmethod
+    async def async_get_admin(cls, token: str, db):
+        payload = get_admin_payload(token)
+        if not payload:
+            return
+
+        if payload['username'] in SUDOERS and payload['is_sudo'] is True:
+            return cls(username=payload['username'], is_sudo=True)
+
+        dbadmin = await crud.async_get_admin(db, payload['username'])
+        if not dbadmin:
+            return
+
+        if dbadmin.password_reset_at:
+            if not payload.get("created_at"):
+                return
+            if dbadmin.password_reset_at > payload.get("created_at"):
+                return
+
+        return cls.model_validate(dbadmin)
+
+    @classmethod
+    async def async_get_current(cls,
+                                db=Depends(get_async_db),
+                                token: str = Depends(oauth2_scheme)):
+        admin = await cls.async_get_admin(token, db)
+        if not admin:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return admin
+
+    @classmethod
+    async def async_check_sudo_admin(cls,
+                                     db=Depends(get_async_db),
+                                     token: str = Depends(oauth2_scheme)):
+        admin = await cls.async_get_admin(token, db)
         if not admin:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

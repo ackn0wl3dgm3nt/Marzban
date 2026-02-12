@@ -1,7 +1,7 @@
 from typing import Optional, Union
 from app.models.admin import AdminInDB, AdminValidationResult, Admin
 from app.models.user import UserResponse, UserStatus
-from app.db import Session, crud, get_db
+from app.db import Session, crud, get_db, get_async_db
 from config import SUDOERS
 from fastapi import Depends, HTTPException
 from datetime import datetime, timezone, timedelta
@@ -104,6 +104,39 @@ def get_expired_users_list(db: Session, admin: Admin, expired_after: Optional[da
 
     dbadmin = crud.get_admin(db, admin.username)
     dbusers = crud.get_users(
+        db=db,
+        status=[UserStatus.expired, UserStatus.limited],
+        admin=dbadmin if not admin.is_sudo else None
+    )
+
+    return [
+        u for u in dbusers
+        if u.expire and expired_after.timestamp() <= u.expire <= expired_before.timestamp()
+    ]
+
+
+async def async_get_validated_user(
+    username: str,
+    admin: Admin = Depends(Admin.async_get_current),
+    db=Depends(get_async_db),
+) -> UserResponse:
+    dbuser = await crud.async_get_user(db, username)
+    if not dbuser:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not (admin.is_sudo or (dbuser.admin and dbuser.admin.username == admin.username)):
+        raise HTTPException(status_code=403, detail="You're not allowed")
+
+    return dbuser
+
+
+async def async_get_expired_users_list(db, admin: Admin, expired_after: Optional[datetime] = None,
+                                       expired_before: Optional[datetime] = None):
+    expired_before = expired_before or datetime.now(timezone.utc)
+    expired_after = expired_after or datetime.min.replace(tzinfo=timezone.utc)
+
+    dbadmin = await crud.async_get_admin(db, admin.username)
+    dbusers = await crud.async_get_users(
         db=db,
         status=[UserStatus.expired, UserStatus.limited],
         admin=dbadmin if not admin.is_sudo else None

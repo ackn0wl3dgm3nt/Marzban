@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
 
-from sqlalchemy import and_, delete, func, or_
-from sqlalchemy.orm import Query, Session, joinedload
+from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy.orm import Query, Session, joinedload, selectinload
 from sqlalchemy.sql.functions import coalesce
 
 from app.db.models import (
@@ -1498,3 +1498,404 @@ def count_online_users(db: Session, hours: int = 24):
     query = db.query(func.count(User.id)).filter(User.online_at.isnot(
         None), User.online_at >= twenty_four_hours_ago)
     return query.scalar()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Async CRUD functions for route handlers (hot path)
+# These mirror sync versions above but use SQLAlchemy 2.0 async API.
+# Sync versions are kept for background jobs running in threads.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _user_select():
+    """Base select statement for User with eager-loaded relations."""
+    return select(User).options(
+        joinedload(User.admin),
+        joinedload(User.next_plan),
+        selectinload(User.proxies).selectinload(Proxy.excluded_inbounds),
+    )
+
+
+async def async_get_or_create_inbound(db, inbound_tag: str) -> ProxyInbound:
+    stmt = select(ProxyInbound).where(ProxyInbound.tag == inbound_tag)
+    result = await db.execute(stmt)
+    inbound = result.scalar_one_or_none()
+    if not inbound:
+        inbound = ProxyInbound(tag=inbound_tag)
+        db.add(inbound)
+        await db.flush()
+        host = ProxyHost(
+            remark="🚀 Marz ({USERNAME}) [{PROTOCOL} - {TRANSPORT}]",
+            address="{SERVER_IP}",
+            inbound=inbound,
+        )
+        db.add(host)
+        await db.flush()
+        await db.refresh(inbound)
+    return inbound
+
+
+async def async_get_user(db, username: str) -> Optional[User]:
+    stmt = _user_select().where(User.username == username)
+    result = await db.execute(stmt)
+    return result.unique().scalar_one_or_none()
+
+
+async def async_get_admin(db, username: str) -> Optional[Admin]:
+    stmt = select(Admin).where(Admin.username == username)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def async_get_notification_reminder(
+    db, user_id: int, reminder_type, threshold: Optional[int] = None
+) -> Optional[NotificationReminder]:
+    stmt = select(NotificationReminder).where(
+        NotificationReminder.user_id == user_id,
+        NotificationReminder.type == reminder_type,
+    )
+    if threshold is not None:
+        stmt = stmt.where(NotificationReminder.threshold == threshold)
+
+    result = await db.execute(stmt)
+    reminder = result.scalar_one_or_none()
+
+    if reminder is None:
+        return None
+
+    if reminder.expires_at and reminder.expires_at < datetime.now(UTC):
+        await db.delete(reminder)
+        await db.flush()
+        return None
+
+    return reminder
+
+
+async def async_delete_notification_reminder(db, dbreminder: NotificationReminder) -> None:
+    await db.delete(dbreminder)
+    await db.flush()
+
+
+@profile("crud.create_user")
+async def async_create_user(db, user: UserCreate, admin: Admin = None) -> User:
+    excluded_inbounds_tags = user.excluded_inbounds
+    proxies = []
+    for proxy_type, settings in user.proxies.items():
+        excluded_inbounds = [
+            await async_get_or_create_inbound(db, tag) for tag in excluded_inbounds_tags[proxy_type]
+        ]
+        proxies.append(
+            Proxy(type=proxy_type.value,
+                  settings=settings.dict(no_obj=True),
+                  excluded_inbounds=excluded_inbounds)
+        )
+
+    dbuser = User(
+        username=user.username,
+        proxies=proxies,
+        status=user.status,
+        data_limit=(user.data_limit or None),
+        expire=(user.expire or None),
+        admin=admin,
+        data_limit_reset_strategy=user.data_limit_reset_strategy,
+        note=user.note,
+        on_hold_expire_duration=(user.on_hold_expire_duration or None),
+        on_hold_timeout=(user.on_hold_timeout or None),
+        auto_delete_in_days=user.auto_delete_in_days,
+        next_plan=NextPlan(
+            data_limit=user.next_plan.data_limit,
+            expire=user.next_plan.expire,
+            add_remaining_traffic=user.next_plan.add_remaining_traffic,
+            fire_on_either=user.next_plan.fire_on_either,
+        ) if user.next_plan else None
+    )
+    db.add(dbuser)
+    await db.commit()
+    await db.refresh(dbuser)
+    return dbuser
+
+
+@profile("crud.remove_user")
+async def async_remove_user(db, dbuser: User) -> User:
+    await db.delete(dbuser)
+    await db.commit()
+    return dbuser
+
+
+@profile("crud.update_user")
+async def async_update_user(db, dbuser: User, modify: UserModify) -> User:
+    added_proxies: Dict[ProxyTypes, Proxy] = {}
+    if modify.proxies:
+        for proxy_type, settings in modify.proxies.items():
+            stmt = select(Proxy).where(Proxy.user_id == dbuser.id, Proxy.type == proxy_type)
+            result = await db.execute(stmt)
+            dbproxy = result.scalar_one_or_none()
+            if dbproxy:
+                dbproxy.settings = settings.dict(no_obj=True)
+            else:
+                new_proxy = Proxy(type=proxy_type, settings=settings.dict(no_obj=True))
+                dbuser.proxies.append(new_proxy)
+                added_proxies.update({proxy_type: new_proxy})
+        for proxy in dbuser.proxies:
+            if proxy.type not in modify.proxies:
+                await db.delete(proxy)
+    if modify.inbounds:
+        for proxy_type, tags in modify.excluded_inbounds.items():
+            stmt = select(Proxy).where(Proxy.user_id == dbuser.id, Proxy.type == proxy_type)
+            result = await db.execute(stmt)
+            dbproxy = result.scalar_one_or_none() or added_proxies.get(proxy_type)
+            if dbproxy:
+                dbproxy.excluded_inbounds = [await async_get_or_create_inbound(db, tag) for tag in tags]
+
+    if modify.status is not None:
+        dbuser.status = modify.status
+
+    if modify.data_limit is not None:
+        dbuser.data_limit = (modify.data_limit or None)
+        if dbuser.status not in (UserStatus.expired, UserStatus.disabled):
+            if not dbuser.data_limit or dbuser.used_traffic < dbuser.data_limit:
+                if dbuser.status != UserStatus.on_hold:
+                    dbuser.status = UserStatus.active
+
+                for percent in sorted(NOTIFY_REACHED_USAGE_PERCENT, reverse=True):
+                    if not dbuser.data_limit or (calculate_usage_percent(
+                            dbuser.used_traffic, dbuser.data_limit) < percent):
+                        reminder = await async_get_notification_reminder(
+                            db, dbuser.id, ReminderType.data_usage, threshold=percent)
+                        if reminder:
+                            await async_delete_notification_reminder(db, reminder)
+            else:
+                dbuser.status = UserStatus.limited
+
+    if modify.expire is not None:
+        dbuser.expire = (modify.expire or None)
+        if dbuser.status in (UserStatus.active, UserStatus.expired):
+            if not dbuser.expire or dbuser.expire > datetime.now(UTC).timestamp():
+                dbuser.status = UserStatus.active
+                for days_left in sorted(NOTIFY_DAYS_LEFT):
+                    if not dbuser.expire or (calculate_expiration_days(
+                            dbuser.expire) > days_left):
+                        reminder = await async_get_notification_reminder(
+                            db, dbuser.id, ReminderType.expiration_date, threshold=days_left)
+                        if reminder:
+                            await async_delete_notification_reminder(db, reminder)
+            else:
+                dbuser.status = UserStatus.expired
+
+    if modify.note is not None:
+        dbuser.note = modify.note or None
+
+    if modify.data_limit_reset_strategy is not None:
+        dbuser.data_limit_reset_strategy = modify.data_limit_reset_strategy.value
+
+    if modify.on_hold_timeout is not None:
+        dbuser.on_hold_timeout = modify.on_hold_timeout
+
+    if modify.on_hold_expire_duration is not None:
+        dbuser.on_hold_expire_duration = modify.on_hold_expire_duration
+
+    if modify.next_plan is not None:
+        dbuser.next_plan = NextPlan(
+            data_limit=modify.next_plan.data_limit,
+            expire=modify.next_plan.expire,
+            add_remaining_traffic=modify.next_plan.add_remaining_traffic,
+            fire_on_either=modify.next_plan.fire_on_either,
+        )
+    elif dbuser.next_plan is not None:
+        await db.delete(dbuser.next_plan)
+
+    dbuser.edit_at = datetime.now(UTC)
+
+    await db.commit()
+    await db.refresh(dbuser)
+    return dbuser
+
+
+async def async_get_users(
+    db,
+    offset: Optional[int] = None,
+    limit: Optional[int] = None,
+    usernames: Optional[List[str]] = None,
+    search: Optional[str] = None,
+    status: Optional[Union[UserStatus, list]] = None,
+    sort: Optional[List[UsersSortingOptions]] = None,
+    admin: Optional[Admin] = None,
+    admins: Optional[List[str]] = None,
+    reset_strategy: Optional[Union[UserDataLimitResetStrategy, list]] = None,
+    return_with_count: bool = False,
+) -> Union[List[User], Tuple[List[User], int]]:
+    stmt = _user_select()
+
+    if search:
+        stmt = stmt.where(or_(User.username.ilike(f"%{search}%"), User.note.ilike(f"%{search}%")))
+
+    if usernames:
+        stmt = stmt.where(User.username.in_(usernames))
+
+    if status:
+        if isinstance(status, list):
+            stmt = stmt.where(User.status.in_(status))
+        else:
+            stmt = stmt.where(User.status == status)
+
+    if reset_strategy:
+        if isinstance(reset_strategy, list):
+            stmt = stmt.where(User.data_limit_reset_strategy.in_(reset_strategy))
+        else:
+            stmt = stmt.where(User.data_limit_reset_strategy == reset_strategy)
+
+    if admin:
+        stmt = stmt.where(User.admin == admin)
+
+    if admins:
+        stmt = stmt.where(User.admin.has(Admin.username.in_(admins)))
+
+    count = None
+    if return_with_count:
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        count_result = await db.execute(count_stmt)
+        count = count_result.scalar()
+
+    if sort:
+        stmt = stmt.order_by(*(opt.value for opt in sort))
+
+    if offset:
+        stmt = stmt.offset(offset)
+    if limit:
+        stmt = stmt.limit(limit)
+
+    result = await db.execute(stmt)
+    users = result.unique().scalars().all()
+
+    if return_with_count:
+        return users, count
+
+    return users
+
+
+async def async_reset_user_data_usage(db, dbuser: User) -> User:
+    usage_log = UserUsageResetLogs(
+        user=dbuser,
+        used_traffic_at_reset=dbuser.used_traffic,
+    )
+    db.add(usage_log)
+
+    dbuser.used_traffic = 0
+    await db.execute(delete(NodeUserUsage).where(NodeUserUsage.user_id == dbuser.id))
+    if dbuser.status not in (UserStatus.expired or UserStatus.disabled):
+        dbuser.status = UserStatus.active.value
+
+    if dbuser.next_plan:
+        await db.delete(dbuser.next_plan)
+        dbuser.next_plan = None
+    db.add(dbuser)
+
+    await db.commit()
+    await db.refresh(dbuser)
+    return dbuser
+
+
+async def async_revoke_user_sub(db, dbuser: User) -> User:
+    dbuser.sub_revoked_at = datetime.now(UTC)
+
+    user = UserResponse.model_validate(dbuser)
+    for proxy_type, settings in user.proxies.copy().items():
+        settings.revoke()
+        user.proxies[proxy_type] = settings
+    dbuser = await async_update_user(db, dbuser, user)
+
+    await db.commit()
+    await db.refresh(dbuser)
+    return dbuser
+
+
+async def async_reset_user_by_next(db, dbuser: User) -> User:
+    if dbuser.next_plan is None:
+        return None
+
+    usage_log = UserUsageResetLogs(
+        user=dbuser,
+        used_traffic_at_reset=dbuser.used_traffic,
+    )
+    db.add(usage_log)
+
+    await db.execute(delete(NodeUserUsage).where(NodeUserUsage.user_id == dbuser.id))
+    dbuser.status = UserStatus.active.value
+
+    dbuser.data_limit = dbuser.next_plan.data_limit + \
+        (0 if dbuser.next_plan.add_remaining_traffic else dbuser.data_limit - dbuser.used_traffic)
+    dbuser.expire = dbuser.next_plan.expire
+
+    dbuser.used_traffic = 0
+    await db.delete(dbuser.next_plan)
+    dbuser.next_plan = None
+    db.add(dbuser)
+
+    await db.commit()
+    await db.refresh(dbuser)
+    return dbuser
+
+
+async def async_set_owner(db, dbuser: User, admin: Admin) -> User:
+    dbuser.admin = admin
+    await db.commit()
+    await db.refresh(dbuser)
+    return dbuser
+
+
+async def async_get_user_usages(
+    db, dbuser: User, start: datetime, end: datetime
+) -> List[UserUsageResponse]:
+    usages = {0: UserUsageResponse(
+        node_id=None, node_name="Master", used_traffic=0
+    )}
+
+    node_result = await db.execute(select(Node))
+    for node in node_result.scalars().all():
+        usages[node.id] = UserUsageResponse(
+            node_id=node.id, node_name=node.name, used_traffic=0
+        )
+
+    cond = and_(
+        NodeUserUsage.user_id == dbuser.id,
+        NodeUserUsage.created_at >= start,
+        NodeUserUsage.created_at <= end,
+    )
+    usage_result = await db.execute(select(NodeUserUsage).where(cond))
+    for v in usage_result.scalars().all():
+        try:
+            usages[v.node_id or 0].used_traffic += v.used_traffic
+        except KeyError:
+            pass
+
+    return list(usages.values())
+
+
+async def async_get_all_users_usages(
+    db, admin, start: datetime, end: datetime
+) -> List[UserUsageResponse]:
+    usages = {0: UserUsageResponse(
+        node_id=None, node_name="Master", used_traffic=0
+    )}
+
+    node_result = await db.execute(select(Node))
+    for node in node_result.scalars().all():
+        usages[node.id] = UserUsageResponse(
+            node_id=node.id, node_name=node.name, used_traffic=0
+        )
+
+    admin_users_list = await async_get_users(db=db, admins=admin)
+    admin_user_ids = set(user.id for user in admin_users_list)
+
+    cond = and_(
+        NodeUserUsage.created_at >= start,
+        NodeUserUsage.created_at <= end,
+        NodeUserUsage.user_id.in_(admin_user_ids),
+    )
+    usage_result = await db.execute(select(NodeUserUsage).where(cond))
+    for v in usage_result.scalars().all():
+        try:
+            usages[v.node_id or 0].used_traffic += v.used_traffic
+        except KeyError:
+            pass
+
+    return list(usages.values())
